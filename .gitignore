@@ -1,0 +1,60 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ── Environment variables / secrets ───────────────────────────────────────────
+.env
+.env.*
+*.env
+secrets.json
+
+# ── Jupyter Notebooks ─────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── RAG project – runtime data (never commit these) ───────────────────────────
+
+# Uploaded PDFs
+data/pdfs/
+
+# ChromaDB vector store (auto-rebuilt on ingest)
+data/vector_store/
+
+# Downloaded sentence-transformer model (run download_model.py to restore)
+models/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+flask_debug.log
+
+# ── OS / IDE ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# ── Pytest / coverage ─────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+RAG.ipynb

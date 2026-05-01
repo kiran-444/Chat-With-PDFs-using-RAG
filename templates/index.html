@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── Sidebar ─────────────────────────────────────────────── -->
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <span class="brand-name">RAG<span class="accent">Studio</span></span>
+    </div>
+
+    <!-- LLM Config -->
+    <section class="sidebar-section">
+      <h3 class="section-label">LLM Provider</h3>
+      <div class="provider-tabs">
+        <button class="provider-btn active" data-provider="groq">Groq</button>
+        <button class="provider-btn" data-provider="gemini">Gemini</button>
+        <button class="provider-btn" data-provider="openai">OpenAI</button>
+      </div>
+      <div class="input-group">
+        <label>API Key</label>
+        <div class="password-wrap">
+          <input type="password" id="apiKey" placeholder="Enter your API key…" autocomplete="off" />
+          <button class="eye-btn" id="toggleKey" title="Show/hide key">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="input-group">
+        <label>Top-K Results <span id="topkVal">5</span></label>
+        <input type="range" id="topK" min="1" max="10" value="5" />
+      </div>
+    </section>
+
+    <!-- Upload -->
+    <section class="sidebar-section">
+      <h3 class="section-label">Documents</h3>
+      <div class="drop-zone" id="dropZone">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <p>Drop PDFs here<br/><span>or click to browse</span></p>
+        <input type="file" id="fileInput" multiple accept=".pdf" hidden />
+      </div>
+      <div id="fileList" class="file-list"></div>
+      <div class="btn-row">
+        <button class="btn btn-outline" id="uploadBtn" disabled>Upload</button>
+        <button class="btn btn-primary" id="ingestBtn" disabled>⚡ Ingest</button>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="sidebar-section">
+      <h3 class="section-label">Index Status</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-val" id="statPdfs">0</span>
+          <span class="stat-label">PDFs</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-val" id="statChunks">0</span>
+          <span class="stat-label">Chunks</span>
+        </div>
+      </div>
+      <button class="btn btn-danger" id="clearBtn">🗑 Clear Index</button>
+    </section>
+
+  </aside>
+
+  <!-- ── Main Chat Area ───────────────────────────────────────── -->
+  <main class="main">
+
+    <header class="chat-header">
+      <div class="chat-header-left">
+        <h1>Ask your documents</h1>
+        <p class="subtitle" id="headerStatus">Upload & ingest PDFs to begin</p>
+      </div>
+      <div class="header-badge" id="statusBadge">
+        <span class="dot"></span> <span id="badgeText">Idle</span>
+      </div>
+    </header>
+
+    <div class="chat-body" id="chatBody">
+      <!-- Welcome -->
+      <div class="welcome-state" id="welcomeState">
+        <div class="welcome-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <h2>Start a conversation</h2>
+        <p>Upload your PDFs, hit Ingest, then ask anything.</p>
+        <div class="hint-chips">
+          <button class="hint-chip" data-hint="What are the main topics covered in these documents?">What topics are covered?</button>
+          <button class="hint-chip" data-hint="Summarize the key points from all documents.">Summarize key points</button>
+          <button class="hint-chip" data-hint="What conclusions or recommendations are made?">Conclusions & recommendations</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <div class="sources-bar" id="sourcesBar" style="display:none"></div>
+      <div class="input-bar">
+        <textarea id="queryInput" placeholder="Ask a question about your documents…" rows="1"></textarea>
+        <button class="send-btn" id="sendBtn" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <p class="input-hint">Answers are grounded in your indexed documents.</p>
+    </div>
+
+  </main>
+
+  <!-- ── Toast ───────────────────────────────────────────────── -->
+  <div id="toast" class="toast"></div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
