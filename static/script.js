@@ -1,7 +1,7 @@
 /* ── State ───────────────────────────────────────────────────── */
-let selectedFiles  = [];
+let selectedFiles   = [];
 let currentProvider = 'groq';
-let isIndexed = false;
+let isIndexed       = false;
 
 /* ── DOM refs ────────────────────────────────────────────────── */
 const dropZone    = document.getElementById('dropZone');
@@ -10,8 +10,6 @@ const fileList    = document.getElementById('fileList');
 const uploadBtn   = document.getElementById('uploadBtn');
 const ingestBtn   = document.getElementById('ingestBtn');
 const clearBtn    = document.getElementById('clearBtn');
-const apiKey      = document.getElementById('apiKey');
-const toggleKey   = document.getElementById('toggleKey');
 const topKSlider  = document.getElementById('topK');
 const topkVal     = document.getElementById('topkVal');
 const queryInput  = document.getElementById('queryInput');
@@ -24,6 +22,9 @@ const statChunks  = document.getElementById('statChunks');
 const statusBadge = document.getElementById('statusBadge');
 const badgeText   = document.getElementById('badgeText');
 const headerStatus= document.getElementById('headerStatus');
+const envStatus   = document.getElementById('envStatus');
+const envDot      = document.getElementById('envDot');
+const envLabel    = document.getElementById('envLabel');
 const dot         = statusBadge.querySelector('.dot');
 const toast       = document.getElementById('toast');
 let   toastTimer  = null;
@@ -33,7 +34,7 @@ function showToast(msg, type = 'info', dur = 3000) {
   toast.textContent = msg;
   toast.className = `toast ${type} show`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.classList.remove('show'); }, dur);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), dur);
 }
 
 /* ── Badge ───────────────────────────────────────────────────── */
@@ -42,21 +43,88 @@ function setBadge(text, state) {
   dot.className = 'dot ' + (state || '');
 }
 
+/* ── Load config from backend (.env) ────────────────────────── */
+async function loadConfig() {
+  try {
+    const res  = await fetch('/config');
+    const data = await res.json();
+
+    const available = data.available_providers || [];
+    currentProvider = data.default_provider || 'groq';
+
+    // Show/hide provider tabs based on what keys exist in .env
+    document.querySelectorAll('.provider-btn').forEach(btn => {
+      const p = btn.dataset.provider;
+      if (!available.includes(p)) {
+        btn.disabled = true;
+        btn.title    = `No ${p.toUpperCase()}_API_KEY in .env`;
+        btn.classList.add('disabled-provider');
+      }
+      btn.classList.toggle('active', p === currentProvider);
+    });
+
+    // Env status pill
+    if (available.length > 0) {
+      envDot.classList.add('env-ok');
+      envLabel.textContent = `${currentProvider.charAt(0).toUpperCase() + currentProvider.slice(1)} key loaded ✓`;
+    } else {
+      envDot.classList.add('env-err');
+      envLabel.textContent = 'No API key found in .env';
+      showToast('Add GROQ_API_KEY to your .env file', 'error', 6000);
+    }
+  } catch (_) {
+    envDot.classList.add('env-err');
+    envLabel.textContent = 'Could not read config';
+  }
+}
+
 /* ── Provider tabs ───────────────────────────────────────────── */
 document.querySelectorAll('.provider-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    if (btn.disabled) return;
     document.querySelectorAll('.provider-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentProvider = btn.dataset.provider;
-    const placeholders = { groq: 'gsk_…', gemini: 'AIza…', openai: 'sk-proj-…' };
-    apiKey.placeholder = placeholders[currentProvider] || 'Enter your API key…';
+    // Update env pill label
+    envLabel.textContent = `${currentProvider.charAt(0).toUpperCase() + currentProvider.slice(1)} key loaded ✓`;
   });
 });
 
-/* ── Toggle API key visibility ──────────────────────────────── */
-toggleKey.addEventListener('click', () => {
-  apiKey.type = apiKey.type === 'password' ? 'text' : 'password';
+
+/* ── Mobile sidebar toggle ───────────────────────────────────── */
+const sidebar         = document.getElementById('sidebar');
+const hamburger       = document.getElementById('hamburger');
+const sidebarOverlay  = document.getElementById('sidebarOverlay');
+
+function openSidebar() {
+  sidebar.classList.add('open');
+  hamburger.classList.add('open');
+  sidebarOverlay.classList.add('visible');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+  sidebar.classList.remove('open');
+  hamburger.classList.remove('open');
+  sidebarOverlay.classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+hamburger.addEventListener('click', () => {
+  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
 });
+
+sidebarOverlay.addEventListener('click', closeSidebar);
+
+// Close sidebar on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSidebar();
+});
+
+// Close sidebar automatically after ingest/upload on mobile
+function closeSidebarOnMobile() {
+  if (window.innerWidth <= 768) closeSidebar();
+}
 
 /* ── Top-K slider ────────────────────────────────────────────── */
 topKSlider.addEventListener('input', () => { topkVal.textContent = topKSlider.value; });
@@ -65,7 +133,7 @@ topKSlider.addEventListener('input', () => { topkVal.textContent = topKSlider.va
 dropZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => addFiles([...fileInput.files]));
 
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 dropZone.addEventListener('drop', e => {
   e.preventDefault();
@@ -76,11 +144,8 @@ dropZone.addEventListener('drop', e => {
 function addFiles(files) {
   const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
   if (!pdfs.length) { showToast('Only PDF files are supported', 'error'); return; }
-
   pdfs.forEach(f => {
-    if (!selectedFiles.find(sf => sf.name === f.name)) {
-      selectedFiles.push(f);
-    }
+    if (!selectedFiles.find(sf => sf.name === f.name)) selectedFiles.push(f);
   });
   renderFileList();
 }
@@ -100,7 +165,6 @@ function renderFileList() {
     `;
     fileList.appendChild(div);
   });
-
   fileList.querySelectorAll('.file-remove').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedFiles.splice(parseInt(btn.dataset.i), 1);
@@ -121,12 +185,10 @@ uploadBtn.addEventListener('click', async () => {
   if (!selectedFiles.length) return;
   uploadBtn.textContent = 'Uploading…';
   uploadBtn.classList.add('loading');
-
   const fd = new FormData();
   selectedFiles.forEach(f => fd.append('files', f));
-
   try {
-    const res = await fetch('/upload', { method: 'POST', body: fd });
+    const res  = await fetch('/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     showToast(data.message, 'success');
@@ -148,20 +210,16 @@ ingestBtn.addEventListener('click', async () => {
   setBadge('Ingesting…', 'pulse');
   headerStatus.textContent = 'Processing PDFs — this may take a moment…';
 
-  // If there are pending local files, upload them first
   if (selectedFiles.length) {
     const fd = new FormData();
     selectedFiles.forEach(f => fd.append('files', f));
-    try {
-      await fetch('/upload', { method: 'POST', body: fd });
-    } catch (_) {}
+    try { await fetch('/upload', { method: 'POST', body: fd }); } catch (_) {}
   }
 
   try {
-    const res = await fetch('/ingest', { method: 'POST' });
+    const res  = await fetch('/ingest', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
-
     showToast(`Indexed ${data.chunks_indexed} chunks from ${data.pdfs_processed} PDF(s)`, 'success', 4000);
     isIndexed = true;
     selectedFiles = [];
@@ -184,7 +242,7 @@ ingestBtn.addEventListener('click', async () => {
 clearBtn.addEventListener('click', async () => {
   if (!confirm('Clear all PDFs and the vector index?')) return;
   try {
-    const res = await fetch('/clear', { method: 'POST' });
+    const res  = await fetch('/clear', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     isIndexed = false;
@@ -204,9 +262,9 @@ clearBtn.addEventListener('click', async () => {
 /* ── Status ──────────────────────────────────────────────────── */
 async function refreshStatus() {
   try {
-    const res = await fetch('/status');
+    const res  = await fetch('/status');
     const data = await res.json();
-    statPdfs.textContent = data.uploaded_pdfs;
+    statPdfs.textContent   = data.uploaded_pdfs;
     statChunks.textContent = data.indexed_chunks;
     if (data.indexed_chunks > 0) {
       isIndexed = true;
@@ -229,7 +287,6 @@ queryInput.addEventListener('input', () => {
 
 sendBtn.addEventListener('click', sendQuery);
 
-// Hint chips
 document.querySelectorAll('.hint-chip').forEach(chip => {
   chip.addEventListener('click', () => {
     queryInput.value = chip.dataset.hint;
@@ -241,13 +298,9 @@ document.querySelectorAll('.hint-chip').forEach(chip => {
 async function sendQuery() {
   const q = queryInput.value.trim();
   if (!q) return;
-  const key = apiKey.value.trim();
-  if (!key) { showToast('Enter your API key first', 'error'); return; }
   if (!isIndexed) { showToast('Ingest PDFs before querying', 'error'); return; }
 
-  // Hide welcome
   if (welcomeState) welcomeState.style.display = 'none';
-
   appendMsg('user', q);
   queryInput.value = '';
   queryInput.style.height = 'auto';
@@ -259,20 +312,17 @@ async function sendQuery() {
 
   try {
     const res = await fetch('/query', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        query: q,
-        api_key: key,
+        query:    q,
         provider: currentProvider,
-        top_k: parseInt(topKSlider.value),
+        top_k:    parseInt(topKSlider.value),
       }),
     });
     const data = await res.json();
     removeThinking(thinkingId);
-
     if (!res.ok) throw new Error(data.error);
-
     appendMsg('assistant', data.answer);
     renderSources(data.sources || []);
     setBadge('Index ready', 'green');
@@ -288,9 +338,9 @@ async function sendQuery() {
 }
 
 function appendMsg(role, text) {
-  const div = document.createElement('div');
+  const div    = document.createElement('div');
   div.className = `msg ${role}`;
-  const avatar = role === 'user' ? 'You' : 'AI';
+  const avatar  = role === 'user' ? 'You' : 'AI';
   div.innerHTML = `
     <div class="msg-avatar">${avatar}</div>
     <div class="msg-bubble">${escapeHtml(text).replace(/\n/g, '<br>')}</div>
@@ -301,16 +351,14 @@ function appendMsg(role, text) {
 }
 
 function appendThinking() {
-  const id = 'think_' + Date.now();
-  const div = document.createElement('div');
-  div.className = 'msg assistant msg-thinking';
-  div.id = id;
-  div.innerHTML = `
+  const id      = 'think_' + Date.now();
+  const div     = document.createElement('div');
+  div.className  = 'msg assistant msg-thinking';
+  div.id         = id;
+  div.innerHTML  = `
     <div class="msg-avatar">AI</div>
     <div class="msg-bubble">
-      <div class="thinking-dots">
-        <span></span><span></span><span></span>
-      </div>
+      <div class="thinking-dots"><span></span><span></span><span></span></div>
       Thinking…
     </div>
   `;
@@ -325,10 +373,10 @@ function removeThinking(id) {
 }
 
 function renderSources(sources) {
-  if (!sources || sources.length === 0) return;
+  if (!sources || !sources.length) return;
   sourcesBar.innerHTML = '';
   sources.forEach(s => {
-    const chip = document.createElement('div');
+    const chip  = document.createElement('div');
     chip.className = 'source-chip';
     const fname = s.source ? s.source.split('/').pop().split('\\').pop() : 'Unknown';
     chip.innerHTML = `
@@ -345,17 +393,16 @@ function renderSources(sources) {
   sourcesBar.style.display = 'flex';
 }
 
-function scrollBottom() {
-  chatBody.scrollTop = chatBody.scrollHeight;
-}
+function scrollBottom() { chatBody.scrollTop = chatBody.scrollHeight; }
 
 function escapeHtml(str) {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;');
 }
 
-/* ── Init ─────────────────────────────────────────────────────── */
+/* ── Init ────────────────────────────────────────────────────── */
+loadConfig();
 refreshStatus();
